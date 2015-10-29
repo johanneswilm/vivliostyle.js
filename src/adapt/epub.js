@@ -1106,6 +1106,7 @@ adapt.epub.OPFView.prototype.firstPage = function() {
  * @return {!adapt.task.Result.<adapt.vtree.Page>}
  */
 adapt.epub.OPFView.prototype.lastPage = function() {
+	var self = this;
 	return this.renderPage({spineIndex: this.opf.spine.length - 1, pageIndex: Number.POSITIVE_INFINITY, offsetInItem: 0}).thenAsync(function(result) {
 		self.currentPosition = result.position;
 		return adapt.task.newResult(result.page);
@@ -1157,7 +1158,9 @@ adapt.epub.OPFView.prototype.previousPage = function() {
 	} else {
 		this.currentPosition.pageIndex--;
 	}
+	var self = this;
 	return this.renderPage(this.currentPosition).thenAsync(function(result) {
+		self.currentPosition = result.position;
 		return adapt.task.newResult(result.page);
 	});
 };
