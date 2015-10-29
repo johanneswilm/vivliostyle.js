@@ -1073,18 +1073,14 @@ adapt.epub.OPFView.prototype.renderPagesUpto = function(limitSpineIndex, limitPa
 	var spineIndex = 0;
     frame.loopWithFrame(function(loopFrame) {
 		var pageIndex = spineIndex == limitSpineIndex ? limitPageIndex : Number.POSITIVE_INFINITY;
-        self.renderPage({spineIndex: spineIndex, pageIndex: pageIndex, offsetInItem: 0}).then(function() {
+        self.renderPage({spineIndex: spineIndex, pageIndex: pageIndex, offsetInItem: 0}).then(function(result) {
             if (++spineIndex > limitSpineIndex) {
                 loopFrame.breakLoop();
+				frame.finish(result.page);
             } else {
                 loopFrame.continueLoop();
             }
         });
-    }).then(function() {
-        self.renderPage(self.currentPosition).thenAsync(function(result) {
-			frame.finish(result.page);
-			return adapt.task.newResult(null);
-		});
     });
     return frame.result();
 };
