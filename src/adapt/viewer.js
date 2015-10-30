@@ -104,44 +104,44 @@ adapt.viewer.Viewer.prototype.callback = function(message) {
 };
 
 /**
+ * @private
  * @param {adapt.base.JSON} command
+ * @param {function(string, adapt.epub.EPUBDocStore):!adapt.task.Result} loader
  * @return {!adapt.task.Result.<boolean>}
  */
-adapt.viewer.Viewer.prototype.loadEPUB = function(command) {
-    vivliostyle.profile.profiler.registerStartTiming("loadEPUB");
+adapt.viewer.Viewer.prototype.loadDocument = function(command, loader) {
+    vivliostyle.profile.profiler.registerStartTiming("loadDocument");
     vivliostyle.profile.profiler.registerStartTiming("loadFirstPage");
     this.viewportElement.setAttribute(adapt.viewer.VIEWPORT_STATUS_ATTRIBUTE, "loading");
-	var url = /** @type {string} */ (command["url"]);
-	var fragment = /** @type {?string} */ (command["fragment"]);
-	var haveZipMetadata = !!command["zipmeta"];
+    var url = /** @type {string} */ (command["url"]);
+    var fragment = /** @type {?string} */ (command["fragment"]);
     var userStyleSheet = /** @type {Array.<{url: ?string, text: ?string}>} */ (command["userStyleSheet"]);
     // force relayout
     this.viewport = null;
-	/** @type {!adapt.task.Frame.<boolean>} */ var frame = adapt.task.newFrame("loadEPUB");
-	var self = this;
+    /** @type {!adapt.task.Frame.<boolean>} */ var frame = adapt.task.newFrame("loadDocument");
+    var self = this;
     self.configure(command).then(function() {
-	var store = new adapt.epub.EPUBDocStore();
-    if (userStyleSheet) {
-        for (var i = 0; i < userStyleSheet.length; i++) {
-            store.addUserStyleSheet(userStyleSheet[i]);
+        var store = new adapt.epub.EPUBDocStore();
+        if (userStyleSheet) {
+            for (var i = 0; i < userStyleSheet.length; i++) {
+                store.addUserStyleSheet(userStyleSheet[i]);
+            }
         }
-    }
-	store.init().then(function() {
-	    var epubURL = adapt.base.resolveURL(url, self.window.location.href);
-	    self.packageURL = epubURL;
-	    store.loadEPUBDoc(epubURL, haveZipMetadata).then(function (opf) {
-	        self.opf = opf;
-	        self.opf.resolveFragment(fragment).then(function(position) {
-	        	self.pagePosition = position;
-                self.resize().then(function() {
-                    self.viewportElement.setAttribute(adapt.viewer.VIEWPORT_STATUS_ATTRIBUTE, "complete");
-                    vivliostyle.profile.profiler.registerEndTiming("loadEPUB");
-                    self.callback({"t":"loaded", "metadata": self.opf.getMetadata()});
-                    frame.finish(true);
+        store.init().then(function() {
+            var docURL = adapt.base.resolveURL(url, self.window.location.href);
+            self.packageURL = docURL;
+            loader(docURL, store).then(function() {
+                self.opf.resolveFragment(fragment).then(function(position) {
+                    self.pagePosition = position;
+                    self.resize().then(function() {
+                        self.viewportElement.setAttribute(adapt.viewer.VIEWPORT_STATUS_ATTRIBUTE, "complete");
+                        vivliostyle.profile.profiler.registerEndTiming("loadDocument");
+                        self.callback({"t":"loaded", "metadata": self.opf.getMetadata()});
+                        frame.finish(true);
+                    });
                 });
-	        });
-	    });
-	});
+            });
+        });
     });
     return frame.result();
 };
@@ -150,43 +150,28 @@ adapt.viewer.Viewer.prototype.loadEPUB = function(command) {
  * @param {adapt.base.JSON} command
  * @return {!adapt.task.Result.<boolean>}
  */
-adapt.viewer.Viewer.prototype.loadXML = function(command) {
-    vivliostyle.profile.profiler.registerStartTiming("loadXML");
-    vivliostyle.profile.profiler.registerStartTiming("loadFirstPage");
-    this.viewportElement.setAttribute(adapt.viewer.VIEWPORT_STATUS_ATTRIBUTE, "loading");
-	var url = /** @type {string} */ (command["url"]);
-    var doc = /** @type {Document} */ (command["document"]);
-	var fragment = /** @type {?string} */ (command["fragment"]);
-    var userStyleSheet = /** @type {Array.<{url: ?string, text: ?string}>} */ (command["userStyleSheet"]);
-    // force relayout
-    this.viewport = null;
-	/** @type {!adapt.task.Frame.<boolean>} */ var frame = adapt.task.newFrame("loadXML");
-	var self = this;
-    self.configure(command).then(function() {
-	var store = new adapt.epub.EPUBDocStore();
-    if (userStyleSheet) {
-        for (var i = 0; i < userStyleSheet.length; i++) {
-            store.addUserStyleSheet(userStyleSheet[i]);
-        }
-    }
-	store.init().then(function() {
-	    var xmlURL = adapt.base.resolveURL(url, self.window.location.href);
-	    self.packageURL = xmlURL;
-	    self.opf = new adapt.epub.OPFDoc(store, "");
-	    self.opf.initWithSingleChapter(xmlURL, doc).then(function() {
-            self.opf.resolveFragment(fragment).then(function(position) {
-                self.pagePosition = position;
-                self.resize().then(function() {
-                    self.viewportElement.setAttribute(adapt.viewer.VIEWPORT_STATUS_ATTRIBUTE, "complete");
-                    vivliostyle.profile.profiler.registerEndTiming("loadXML");
-                    self.callback({"t":"loaded"});
-                    frame.finish(true);
-                });
-            });
+adapt.viewer.Viewer.prototype.loadEPUB = function(command) {
+    var haveZipMetadata = !!command["zipmeta"];
+    var self = this;
+    return this.loadDocument(command, function(docURL, store) {
+        return store.loadEPUBDoc(docURL, haveZipMetadata).thenAsync(function (opf) {
+            self.opf = opf;
+            return adapt.task.newResult(true);
         });
-	});
     });
-    return frame.result();
+};
+
+/**
+ * @param {adapt.base.JSON} command
+ * @return {!adapt.task.Result.<boolean>}
+ */
+adapt.viewer.Viewer.prototype.loadXML = function(command) {
+    var doc = /** @type {Document} */ (command["document"]);
+    var self = this;
+    return this.loadDocument(command, function(docURL, store) {
+        self.opf = new adapt.epub.OPFDoc(store, "");
+        return self.opf.initWithSingleChapter(docURL, doc);
+    });
 };
 
 /**
